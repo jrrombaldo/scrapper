@@ -255,7 +255,6 @@ func main() {
 	var session Data
 	for _, session = range playlist.Data {
 		var video = getSessionVideoURL(session.SessID)
-		fmt.Println(video.URL)
 		var err = DownloadFile(session, video, "tmp")
 		handleError(err, "DownloadingFile")
 
