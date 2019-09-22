@@ -138,7 +138,10 @@ func getSessionVideoURL(sessionId int) Session {
 	return session
 }
 
-type WriteCounter struct{ Total uint64 }
+type WriteCounter struct {
+	Total    uint64
+	FileSize uint64
+}
 
 func (wc *WriteCounter) Write(p []byte) (int, error) {
 	n := len(p)
@@ -154,7 +157,8 @@ func (wc WriteCounter) PrintProgress() {
 
 	// Return again and print current status of download
 	// We use the humanize package to print the bytes in a meaningful way (e.g. 10 MB)
-	fmt.Printf("\rDownloading... %s complete", humanize.Bytes(wc.Total))
+	fmt.Printf("\rDownloading... %s / %s complete", humanize.Bytes(wc.Total), humanize.Bytes(wc.FileSize))
+	//fmt.Printf("\rDownloading... %s complete", humanize.Bytes(wc.Total))
 }
 
 func FileExists(filename string) bool {
@@ -179,7 +183,7 @@ func DownloadFile(session Data, video Session, dir string) error {
 
 	// if file already exists, skip download
 	if FileExists(filepath) {
-		fmt.Print("  -> [" + filepath + "] already downloaded")
+		fmt.Println("  -> [" + filepath + "] already downloaded")
 	}
 
 	// if file temporary files exists, remove it
@@ -200,7 +204,11 @@ func DownloadFile(session Data, video Session, dir string) error {
 	handleError(err, "DownloadRequest")
 	defer resp.Body.Close()
 
+	// getting video size
+	size, _ := strconv.Atoi(resp.Header.Get("Content-Length"))
+
 	counter := &WriteCounter{}
+	counter.FileSize = uint64(size)
 	_, err = io.Copy(out, io.TeeReader(resp.Body, counter))
 	handleError(err, "WritingFile")
 
@@ -247,6 +255,7 @@ func main() {
 	var session Data
 	for _, session = range playlist.Data {
 		var video = getSessionVideoURL(session.SessID)
+		fmt.Println(video.URL)
 		var err = DownloadFile(session, video, "tmp")
 		handleError(err, "DownloadingFile")
 
