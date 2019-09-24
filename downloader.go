@@ -107,7 +107,7 @@ func executeGETRequest(params url.Values) string {
 	return string(dataInBytes)
 }
 
-func getPlaylist(sessionId int) Playlist {
+func getPlaylist(sessionId int, dir string) Playlist {
 	fmt.Println("  -> retrieving playlist for " + strconv.Itoa(sessionId))
 	var params = url.Values{}
 	params.Add("action", "get_playlist")
@@ -120,6 +120,14 @@ func getPlaylist(sessionId int) Playlist {
 		handleError(err, "Parsing Playlist")
 	}
 	fmt.Println("  -> found [" + strconv.Itoa(len(playlist.Data)) + "] sessions on this playlist")
+
+	// writing index
+	indexContent, _ := json.MarshalIndent(playlist, "", " ")
+	var err = ioutil.WriteFile(
+		dir+string(os.PathSeparator)+"index.json",
+		indexContent,
+		0644)
+	handleError(err, "WritingIndex")
 	return playlist
 }
 
@@ -170,16 +178,18 @@ func FileExists(filename string) bool {
 }
 
 func DownloadFile(session Data, video Session, dir string) error {
-	var name string = strconv.Itoa(session.SessID) + " - " + session.SessData.SessionName
+	var name string = session.SessData.SessionName
+
 	var extension = strings.Replace(video.Type, "video/", ".", -1)
 	if len(name) > 256 {
 		name = name[:256]
 	}
-	name += extension // increases the file name length
-	fmt.Println("  -> downloading " + name)
+	name = name + extension // increases the file name length
 
 	var downloadingPrefix = ".downloading"
 	var filepath = dir + string(os.PathSeparator) + name
+
+	fmt.Println("  -> downloading " + filepath)
 
 	// if file already exists, skip download
 	if FileExists(filepath) {
@@ -221,6 +231,21 @@ func DownloadFile(session Data, video Session, dir string) error {
 	return nil
 }
 
+func writeSessionDetails(session Data, dir string) {
+	// writing the session abstract
+	var sessionDetails = session.SessData.SessionName
+	sessionDetails += "\n"
+	sessionDetails += session.SessData.Desc
+	sessionDetails += "\n"
+	//sessionDetails += strings.(session.SessData.Speakers)
+
+	var err = ioutil.WriteFile(
+		dir+string(os.PathSeparator)+session.SessData.SessionName+".txt",
+		[]byte(sessionDetails),
+		0644)
+	handleError(err, "WritingSessionDetail")
+}
+
 func encryptHostname(hostname string, keyb64 string) string {
 	var key, _ = base64.StdEncoding.DecodeString(keyb64)
 	nonce := key[:12] // why bother when the key is just above :)
@@ -250,14 +275,16 @@ func main() {
 		hostname = getHostname("JJrO/dE3tmur31VMr/CCN19WbyxZGLQ/WK7EPqW9vLos", os.Args[1])
 	}
 
-	var playlist Playlist = getPlaylist(70)
+	var dir = "tmp"
+
+	var playlist Playlist = getPlaylist(70, dir)
 
 	var session Data
 	for _, session = range playlist.Data {
 		var video = getSessionVideoURL(session.SessID)
-		var err = DownloadFile(session, video, "tmp")
+		var err = DownloadFile(session, video, dir)
 		handleError(err, "DownloadingFile")
-
+		writeSessionDetails(session, dir)
 	}
 
 }
