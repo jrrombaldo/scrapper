@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/dustin/go-humanize"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -15,6 +14,9 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/dustin/go-humanize"
+	"github.com/fatih/color"
 )
 
 //magic from https://mholt.github.io/json-to-go/
@@ -73,7 +75,7 @@ var hostname = ""
 // TODO improve error handling and propagation
 func handleError(err error, msg string) {
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, msg+"\n"+err.Error())
+		_, _ = fmt.Fprintf(os.Stderr, color.RedString(msg+"\n"+err.Error()))
 		os.Exit(1)
 	}
 }
@@ -119,7 +121,9 @@ func getPlaylist(sessionId int, dir string) Playlist {
 	if err := json.NewDecoder(strings.NewReader(resp)).Decode(&playlist); err != nil {
 		handleError(err, "Parsing Playlist")
 	}
-	fmt.Println("  -> found [" + strconv.Itoa(len(playlist.Data)) + "] sessions on this playlist")
+	fmt.Println("  -> found [",
+		color.CyanString(strconv.Itoa(len(playlist.Data))),
+		"] sessions on this playlist")
 
 	// writing index
 	indexContent, _ := json.MarshalIndent(playlist, "", " ")
@@ -132,7 +136,8 @@ func getPlaylist(sessionId int, dir string) Playlist {
 }
 
 func getSessionVideoURL(sessionId int) Session {
-	fmt.Println("  -> geting session data for " + strconv.Itoa(sessionId))
+	fmt.Println("  -> geting session data for ",
+		color.CyanString(strconv.Itoa(sessionId)))
 	var params = url.Values{}
 	params.Add("action", "get_video")
 	params.Add("session_id", strconv.Itoa(sessionId))
@@ -165,7 +170,8 @@ func (wc WriteCounter) PrintProgress() {
 
 	// Return again and print current status of download
 	// We use the humanize package to print the bytes in a meaningful way (e.g. 10 MB)
-	fmt.Printf("\rDownloading... %s / %s complete", humanize.Bytes(wc.Total), humanize.Bytes(wc.FileSize))
+	fmt.Printf("\rDownloading... %s / %s complete",
+		humanize.Bytes(wc.Total), humanize.Bytes(wc.FileSize))
 	//fmt.Printf("\rDownloading... %s complete", humanize.Bytes(wc.Total))
 }
 
@@ -179,6 +185,8 @@ func FileExists(filename string) bool {
 
 func DownloadFile(session Data, video Session, dir string) error {
 	var name string = session.SessData.SessionName
+	// seems like the IDs are not constant
+	//var name string = strconv.Itoa(session.SessID) + " - " + session.SessData.SessionName
 
 	var extension = strings.Replace(video.Type, "video/", ".", -1)
 	if len(name) > 256 {
@@ -189,22 +197,25 @@ func DownloadFile(session Data, video Session, dir string) error {
 	var downloadingPrefix = ".downloading"
 	var filepath = dir + string(os.PathSeparator) + name
 
-	fmt.Println("  -> downloading " + filepath)
-
 	// if file already exists, skip download
 	if FileExists(filepath) {
-		fmt.Println("  -> [" + filepath + "] already downloaded")
+		fmt.Println("  -> ["+filepath+"] ",
+			color.YellowString("already downloaded"))
+		return nil
 	}
 
 	// if file temporary files exists, remove it
 	if FileExists(filepath + downloadingPrefix) {
-		fmt.Println("  -> file [" + filepath + "] already exist, removing...")
+		fmt.Println("  -> file ["+filepath+"] ",
+			color.MagentaString("already exist, removing..."))
 		err := os.Remove(filepath + downloadingPrefix)
 		if err != nil {
 			fmt.Println("  -> can not delete file " + filepath + downloadingPrefix)
 			return err
 		}
 	}
+
+	fmt.Println("  -> downloading " + color.GreenString(filepath))
 
 	out, err := os.Create(filepath + downloadingPrefix)
 	handleError(err, "CreatingFile")
@@ -239,11 +250,15 @@ func writeSessionDetails(session Data, dir string) {
 	sessionDetails += "\n"
 	//sessionDetails += strings.(session.SessData.Speakers)
 
-	var err = ioutil.WriteFile(
-		dir+string(os.PathSeparator)+session.SessData.SessionName+".txt",
-		[]byte(sessionDetails),
-		0644)
-	handleError(err, "WritingSessionDetail")
+	//oinly write if file does not exists already
+	var filename = dir + string(os.PathSeparator) + session.SessData.SessionName + ".txt"
+	if !FileExists(filename) {
+		var err = ioutil.WriteFile(
+			filename,
+			[]byte(sessionDetails),
+			0644)
+		handleError(err, "WritingSessionDetail")
+	}
 }
 
 func encryptHostname(hostname string, keyb64 string) string {
@@ -267,15 +282,16 @@ func getHostname(ciphertextb64 string, keyb64 string) string {
 }
 
 func main() {
+	ciphertext := "JJrO/dE3tmur31VMr/CCN19WbyxZGLQ/WK7EPqW9vLos" // ecnrypted hostname
 	if len(os.Args) != 2 {
 		fmt.Println("missing aes key")
 		os.Exit(1)
 	} else {
-		fmt.Println(os.Args[1])
-		hostname = getHostname("JJrO/dE3tmur31VMr/CCN19WbyxZGLQ/WK7EPqW9vLos", os.Args[1])
+		hostname = getHostname(ciphertext, os.Args[1])
 	}
 
-	var dir = "tmp"
+	var dir = "./tmp"
+	_ = os.Mkdir(dir, os.ModeDir) // careless ensuring the dir exists
 
 	var playlist Playlist = getPlaylist(70, dir)
 
@@ -285,6 +301,7 @@ func main() {
 		var err = DownloadFile(session, video, dir)
 		handleError(err, "DownloadingFile")
 		writeSessionDetails(session, dir)
+		fmt.Println(strings.Repeat("=", 74))
 	}
 
 }
