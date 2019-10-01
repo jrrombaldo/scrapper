@@ -53,6 +53,11 @@ type Session struct {
 	Srt  string `json:"srt"`
 }
 
+type Conference struct {
+	ID        int
+	Directory string
+}
+
 // sending random UserAgents on the request
 var userAgents = [10]string{
 	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36",
@@ -192,6 +197,7 @@ func DownloadFile(session Data, video Session, dir string) error {
 	if len(name) > 256 {
 		name = name[:256]
 	}
+	name = strings.Replace(name, "/", "-", -1)
 	name = name + extension // increases the file name length
 
 	var downloadingPrefix = ".downloading"
@@ -245,13 +251,13 @@ func DownloadFile(session Data, video Session, dir string) error {
 func writeSessionDetails(session Data, dir string) {
 	// writing the session abstract
 	var sessionDetails = session.SessData.SessionName
-	sessionDetails += "\n"
+	sessionDetails += "\n\n\n"
 	sessionDetails += session.SessData.Desc
-	sessionDetails += "\n"
+	sessionDetails += "\n\n"
 	//sessionDetails += strings.(session.SessData.Speakers)
 
 	//oinly write if file does not exists already
-	var filename = dir + string(os.PathSeparator) + session.SessData.SessionName + ".txt"
+	var filename = dir + string(os.PathSeparator) + strings.Replace(session.SessData.SessionName, "/", "-", -1) + ".txt"
 	if !FileExists(filename) {
 		var err = ioutil.WriteFile(
 			filename,
@@ -290,18 +296,35 @@ func main() {
 		hostname = getHostname(ciphertext, os.Args[1])
 	}
 
-	var dir = "./tmp"
-	_ = os.Mkdir(dir, os.ModeDir) // careless ensuring the dir exists
-
-	var playlist Playlist = getPlaylist(70, dir)
-
-	var session Data
-	for _, session = range playlist.Data {
-		var video = getSessionVideoURL(session.SessID)
-		var err = DownloadFile(session, video, dir)
-		handleError(err, "DownloadingFile")
-		writeSessionDetails(session, dir)
-		fmt.Println(strings.Repeat("=", 74))
+	//
+	//
+	//			>>>>>>> ADD CONFERENCES MORE HERE <<<<<<<<<
+	//
+	//
+	var conferences = []Conference{
+		Conference{70, "./BlackHat-2019"},
+		Conference{71, "./DefCon-2019"},
+		Conference{72, "./DefConVilla-2019"},
+		Conference{73, "./BesideS-2019"},
 	}
+
+	for _, conf := range conferences {
+		_ = os.Mkdir(conf.Directory, os.ModeDir)
+
+		var playlist Playlist = getPlaylist(conf.ID, conf.Directory) //besides
+
+		for _, session := range playlist.Data {
+			var video = getSessionVideoURL(session.SessID)
+			var err = DownloadFile(session, video, conf.Directory)
+			handleError(err, "DownloadingFile")
+
+			writeSessionDetails(session, conf.Directory)
+			fmt.Println(strings.Repeat("=", 74))
+		}
+	}
+
+	// var playlist Playlist = getPlaylist(70, dir) //blackhat
+	// var playlist Playlist = getPlaylist(71, dir) //defcon
+	//var playlist Playlist = getPlaylist(72, dir) //defcon villa
 
 }
