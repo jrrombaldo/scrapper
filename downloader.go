@@ -20,7 +20,7 @@ import (
 )
 
 //magic from https://mholt.github.io/json-to-go/
-type Data struct {
+type Session struct {
 	SessID   int `json:"sess_id"`
 	SessData struct {
 		SessionName string `json:"session_name"`
@@ -43,11 +43,11 @@ type Data struct {
 }
 
 type Playlist struct {
-	HTML string `json:"html"`
-	Data []Data `json:"data"`
+	HTML string    `json:"html"`
+	Data []Session `json:"data"`
 }
 
-type Session struct {
+type Video struct {
 	URL  string `json:"url"`
 	Type string `json:"type"`
 	Srt  string `json:"srt"`
@@ -140,7 +140,7 @@ func getPlaylist(sessionId int, dir string) Playlist {
 	return playlist
 }
 
-func getSessionVideoURL(sessionId int) Session {
+func getVideo(sessionId int) Video {
 	fmt.Println("  -> geting session data for ",
 		color.CyanString(strconv.Itoa(sessionId)))
 	var params = url.Values{}
@@ -149,7 +149,7 @@ func getSessionVideoURL(sessionId int) Session {
 
 	var resp = executeGETRequest(params)
 
-	var session Session
+	var session Video
 	if err := json.NewDecoder(strings.NewReader(resp)).Decode(&session); err != nil {
 		handleError(err, "Parsing Playlist")
 	}
@@ -188,12 +188,13 @@ func FileExists(filename string) bool {
 	return !info.IsDir()
 }
 
-func DownloadFile(session Data, video Session, dir string) error {
+func DownloadVideo(session Session, dir string) error {
 	var name string = session.SessData.SessionName
 	// seems like the IDs are not constant
 	//var name string = strconv.Itoa(session.SessID) + " - " + session.SessData.SessionName
 
-	var extension = strings.Replace(video.Type, "video/", ".", -1)
+	//var extension = strings.Replace(video.Type, "video/", ".", -1)
+	var extension = ".mp4" // only get video if file does not exists
 	if len(name) > 256 {
 		name = name[:256]
 	}
@@ -222,6 +223,7 @@ func DownloadFile(session Data, video Session, dir string) error {
 	}
 
 	fmt.Println("  -> downloading " + color.GreenString(filepath))
+	var video = getVideo(session.SessID)
 
 	out, err := os.Create(filepath + downloadingPrefix)
 	handleError(err, "CreatingFile")
@@ -245,10 +247,12 @@ func DownloadFile(session Data, video Session, dir string) error {
 	err = os.Rename(filepath+downloadingPrefix, filepath)
 	handleError(err, "RenameDownloadedFile")
 
+	writeVideoDetails(session, dir)
+
 	return nil
 }
 
-func writeSessionDetails(session Data, dir string) {
+func writeVideoDetails(session Session, dir string) {
 	// writing the session abstract
 	var sessionDetails = session.SessData.SessionName
 	sessionDetails += "\n\n\n"
@@ -306,19 +310,31 @@ func main() {
 		Conference{71, "./DefCon-2019"},
 		Conference{72, "./DefConVilla-2019"},
 		Conference{73, "./BesideS-2019"},
+		Conference{67, "./DefCon1"},
+		Conference{62, "./BesideS1"},
+		Conference{61, "./BlackHat1"},
+		Conference{59, "./BlackHat2"},
+		Conference{55, "./BesideS2"},
+		Conference{54, "./DefCon2"},
+		Conference{53, "./BlackHat3"},
+		Conference{51, "./DefCon3"},
+		Conference{50, "./BlackHat4"},
+		Conference{46, "./BesideS3"},
+		Conference{45, "./BlackHat5"},
+		Conference{41, "./DefCon4"},
+		Conference{40, "./BlackHat6"},
+		Conference{39, "./BesideS4"},
 	}
 
 	for _, conf := range conferences {
-		_ = os.Mkdir(conf.Directory, os.ModeDir)
+
+		_ = os.Mkdir(conf.Directory, 0755)
 
 		var playlist Playlist = getPlaylist(conf.ID, conf.Directory) //besides
 
 		for _, session := range playlist.Data {
-			var video = getSessionVideoURL(session.SessID)
-			var err = DownloadFile(session, video, conf.Directory)
+			var err = DownloadVideo(session, conf.Directory)
 			handleError(err, "DownloadingFile")
-
-			writeSessionDetails(session, conf.Directory)
 			fmt.Println(strings.Repeat("=", 74))
 		}
 	}
